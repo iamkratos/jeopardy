@@ -1,11 +1,15 @@
 import React, { Component } from 'react';
-import logo from './logo.svg';
-
 import QuestionsGrid from './QuestionGrid';
 import Question from './Question';
-import Nav from './Nav';
+import MainNav from './MainNav';
+import CatNav from './CatNav';
 
-import { BrowserRouter as Router, Route, Link } from 'react-router-dom';
+import {
+	BrowserRouter as Router,
+	Route,
+	Link,
+	Redirect
+} from 'react-router-dom';
 
 import data from './questions.json';
 
@@ -16,54 +20,133 @@ class App extends Component {
 		super();
 
 		this.state = {
-			questions: data.jeopardy,
-			category: 'ROBOTS'
+			questions: [],
+			activeCategories: [],
+			categoryFetchAndSelect: false,
+			categories: [],
+			random: true
 		};
 
-		this.categoryChange = this.categoryChange.bind(this);
+		this.handleCategorySelectAndFetch = this.handleCategorySelectAndFetch.bind(
+			this
+		);
+
+		this.reset = this.reset.bind(this);
+		this.getCategories = this.getCategories.bind(this);
 	}
 
-	categoryChange(e) {
-		console.log(e.target.dataset.cat);
+	componentDidMount() {
+		// picks random categories, sets categories state
+		this.getCategories();
+	}
 
-		this.setState({
-			category: e.target.dataset.cat
+	getCategories() {
+		let x = 1;
+		let y = 90;
+		let z = Math.floor(Math.random() * (y - x + 1) + x);
+		console.log(z);
+		const url = `http://jservice.io/api/categories?count=10&offset=${z}`;
+		fetch(url)
+			.then(data => {
+				return data.json();
+			})
+			.then(data => {
+				return this.setState({
+					categories: data
+				});
+			});
+	}
+
+	reset() {
+		return this.setState({
+			categoryFetchAndSelect: false,
+			questions: [],
+			activeCategories: []
 		});
+	}
+
+	handleCategorySelectAndFetch() {
+		if (
+			!this.state.categoryFetchAndSelect &&
+			document.getElementsByClassName('selected').length > 0
+		) {
+			let categories = document.getElementsByClassName('selected');
+			console.log('cat', categories);
+
+			let activeCategories = [];
+
+			for (var i = 0; i < categories.length; i++) {
+				activeCategories.push(categories[i].textContent);
+			}
+
+			let questions = [];
+
+			const processFetching = async id => {
+				await fetch(`http://jservice.io/api/clues?category=${id}
+			`)
+					.then(data => {
+						return data;
+					})
+					.then(data => {
+						return data.json();
+					})
+					.then(data => {
+						const categories = data.slice(0, 5).map(data => data);
+
+						this.setState({
+							questions: this.state.questions.concat(categories)
+						});
+					});
+			};
+
+			Promise.all(
+				Array.from(categories).map(category => {
+					this.setState({
+						categories: this.state.categories.concat(category.textContent)
+					});
+					processFetching(parseFloat(category.dataset.category));
+				})
+			);
+
+			this.setState({
+				activeCategories: activeCategories,
+				categoryFetchAndSelect: true
+			});
+		}
 	}
 	render() {
-		console.log('data', data);
-
-		const questions = this.state.questions.filter(question => {
-			if (question.name === this.state.category) {
-				return question;
-			}
-		});
-		console.log('Questions', questions);
-
 		return (
 			<div className="App">
-				<header className="App-header">
-					<img src={logo} className="App-logo" alt="logo" />
-					<h1 className="App-title">Bob's Jeopardy</h1>
-				</header>
-
-				<p className="App-intro">Regular Jeopardy</p>
-				<p className="App-intro">Categories</p>
-				<Nav
-					categories={this.state.questions}
-					categoryChange={this.categoryChange}
-				/>
-				<p className="App-intro">Current Category: {this.state.category}</p>
-
 				<Router>
 					<div>
+						<MainNav
+							reset={this.reset}
+							random={this.state.random}
+							getCategories={this.getCategories}
+						/>
 						<Route
 							exact
 							path="/"
 							render={props => (
+								<CatNav
+									handleCategorySelectAndFetch={
+										this.handleCategorySelectAndFetch
+									}
+									categoryFetchAndSelect={this.state.categoryFetchAndSelect}
+									categories={this.state.categories}
+									questions={this.state.questions}
+								/>
+							)}
+						/>
+						<Route
+							exact
+							path="/game/:id"
+							render={props => (
 								<QuestionsGrid
 									questions={this.state.questions}
-									category={this.state.category}
+									categories={this.state.categories}
+									activeCategories={this.state.activeCategories}
+									categoryFetchAndSelect={this.state.categoryFetchAndSelect}
 								/>
 							)}
 						/>
